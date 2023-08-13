@@ -15,8 +15,8 @@ import (
 
 	"github.com/samber/lo"
 
-	"github.com/threecorp/peerdrive/p2p"
-	"github.com/threecorp/peerdrive/sync/event"
+	"github.com/threecorp/peerdrive/pkg/p2p"
+	"github.com/threecorp/peerdrive/pkg/sync/event"
 )
 
 func notifyCopy(h host.Host, path, relPath string) error {
