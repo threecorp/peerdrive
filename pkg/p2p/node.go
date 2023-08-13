@@ -7,7 +7,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/hashicorp/go-multierror"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-kad-dht/dual"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -20,11 +19,13 @@ import (
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
-	ipfslite "github.com/hsanjuan/ipfs-lite"
 	"github.com/ipfs/go-datastore"
+
+	ipfslite "github.com/hsanjuan/ipfs-lite"
 	badger "github.com/ipfs/go-ds-badger"
 	crdt "github.com/ipfs/go-ds-crdt"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/samber/lo"
 )
@@ -81,7 +82,7 @@ func (n *Node) Close() error {
 }
 
 // Default Behavior: https://pkg.go.dev/github.com/libp2p/go-libp2p#New
-func NewNodeByLite(ctx context.Context, port int, rendezvous string) (*Node, error) {
+func NewNode(ctx context.Context, port int, rendezvous string) (*Node, error) {
 	pkey, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
 	if err != nil {
 		return nil, err
@@ -137,7 +138,7 @@ func NewNodeByLite(ctx context.Context, port int, rendezvous string) (*Node, err
 	crdtOpts := crdt.DefaultOptions()
 	crdtOpts.RebroadcastInterval = 5 * time.Second
 	crdtOpts.PutHook = func(k datastore.Key, v []byte) {
-		fmt.Printf("Added: [%s] -> %s\n", k, string(v))
+		fmt.Printf("Added: [%s] -> %d bytes\n", k, len(v))
 	}
 	crdtOpts.DeleteHook = func(k datastore.Key) {
 		fmt.Printf("Removed: [%s]\n", k)
@@ -170,7 +171,7 @@ func (nd *Node) run(psub *pubsub.PubSub) {
 		for {
 			msg, err := netSubs.Next(ctx)
 			if err != nil {
-				fmt.Println(err)
+				log.Printf("subscribe: %+v\n", err)
 				break
 			}
 			nd.Host.ConnManager().TagPeer(msg.ReceivedFrom, "keep", 100)
@@ -198,7 +199,7 @@ func (nd *Node) run(psub *pubsub.PubSub) {
 
 		peerCh, err := rd.FindPeers(ctx, nd.Rendezvous)
 		if err != nil {
-			fmt.Printf("DHT FindPeers failed: %+v\n", err)
+			log.Printf("DHT FindPeers failed: %+v\n", err)
 			continue
 		}
 
@@ -207,11 +208,11 @@ func (nd *Node) run(psub *pubsub.PubSub) {
 				continue
 			}
 			if err := nd.Host.Connect(ctx, p); err != nil {
-				// fmt.Println("DHT Connection failed:", p.ID, ">>", err)
+				// log.Println("DHT Connection failed:", p.ID, ">>", err)
 				continue
 			}
 			if Peers.AppendUnique(p.ID) {
-				fmt.Printf("Connect peer by DHT: %s\n", p.ID)
+				log.Printf("Connect peer by DHT: %s\n", p.ID)
 			}
 		}
 	}
@@ -233,11 +234,11 @@ func (n *discoveryMDNS) Run() {
 			continue
 		}
 		if err := n.host.Connect(context.Background(), p); err != nil {
-			// fmt.Println("MDNS Connection failed:", p.ID, ">>", err)
+			// log.Println("MDNS Connection failed:", p.ID, ">>", err)
 			continue
 		}
 		if Peers.AppendUnique(p.ID) {
-			fmt.Printf("Connect peer by MDNS: %s\n", p.ID)
+			log.Printf("Connect peer by MDNS: %s\n", p.ID)
 		}
 	}
 }
