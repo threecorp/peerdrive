@@ -20,8 +20,8 @@ import (
 
 	"github.com/radovskyb/watcher"
 
-	"github.com/threecorp/peerdrive/p2p"
-	"github.com/threecorp/peerdrive/sync/event"
+	"github.com/threecorp/peerdrive/pkg/p2p"
+	"github.com/threecorp/peerdrive/pkg/sync/event"
 )
 
 const SyncProtocol = "/peerdrive/1.0.0"
