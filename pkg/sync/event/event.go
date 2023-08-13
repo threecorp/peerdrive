@@ -1,10 +1,11 @@
 package event
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"path"
+
+	"golang.org/x/xerrors"
 )
 
 type Op uint
@@ -37,7 +38,7 @@ func (ev *Event) Copy() error {
 	// Create peer's dir
 	dir := path.Dir(ev.Path)
 	if err := os.MkdirAll(dir, 0750); err != nil {
-		return fmt.Errorf("%s error mkdirAll %s: %w", ev.String(), dir, err)
+		return xerrors.Errorf("%s error mkdirAll %s: %w", ev.String(), dir, err)
 	}
 	// Create peer's file
 	f, err := os.Create(ev.Path)
@@ -48,7 +49,7 @@ func (ev *Event) Copy() error {
 
 	// Write a data to peer's file
 	if _, err := f.Write(ev.Data); err != nil {
-		return fmt.Errorf("%s error write: %w", ev.String(), err)
+		return xerrors.Errorf("%s error write: %w", ev.String(), err)
 	}
 
 	return nil
@@ -56,7 +57,7 @@ func (ev *Event) Copy() error {
 
 func (ev *Event) Delete() error {
 	if err := os.Remove(ev.Path); err != nil {
-		return fmt.Errorf("%s error remove %s: %w", ev.String(), ev.Path, err)
+		return xerrors.Errorf("%s error remove %s: %w", ev.String(), ev.Path, err)
 	}
 	return nil
 }

@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ipfs/go-datastore"
-	"github.com/k0kubun/pp"
 	"github.com/libp2p/go-libp2p/core/network"
+
+	"github.com/ipfs/go-datastore"
 
 	"github.com/radovskyb/watcher"
 
@@ -71,7 +71,8 @@ func SyncHandler(nd *p2p.Node) func(stream network.Stream) {
 			}
 
 			if runtime.GOOS != "darwin" {
-				pp.Println(nd.DS.Get(context.Background(), datastore.NewKey("mydatakey")))
+				r, e := nd.DS.Get(context.Background(), datastore.NewKey("mydatakey"))
+				fmt.Printf("Read: %s(%+v)", r, e)
 			}
 		}
 	}
@@ -87,12 +88,12 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 
 	if syncDir == "" {
 		if syncDir, err = os.Getwd(); err != nil {
-			log.Fatalln(err)
+			log.Fatalf("pwd: %+v\n", err)
 		}
 	}
 	syncDir, err = filepath.Abs(syncDir)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalf("abs path: %+v\n", err)
 	}
 
 	go func() {
@@ -118,7 +119,7 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 
 				watchCh <- ev
 			case err := <-w.Error:
-				log.Fatalln(err)
+				log.Fatalf("watcher: %+v\n", err)
 			case <-w.Closed:
 				return
 			}
@@ -156,12 +157,12 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 	}()
 
 	if err := w.AddRecursive("./"); err != nil {
-		log.Fatalln(err)
+		log.Fatalf("recursive watcher: %+v\n", err)
 	}
 	if err := w.Ignore(".git", fmt.Sprintf(".%s", p2p.DSName)); err != nil {
-		log.Fatalln(err)
+		log.Fatalf("ignore watcher: %+v\n", err)
 	}
 	if err := w.Start(time.Millisecond * 300); err != nil {
-		log.Fatalln(err)
+		log.Fatalf("start watcher: %+v\n", err)
 	}
 }

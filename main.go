@@ -5,7 +5,8 @@ import (
 	"flag"
 	"log"
 
-	"github.com/pkg/errors"
+	"golang.org/x/xerrors"
+
 	"github.com/threecorp/peerdrive/pkg/p2p"
 	"github.com/threecorp/peerdrive/pkg/sync"
 )
@@ -29,7 +30,7 @@ func parseArgs() (*args, error) {
 	flag.Visit(func(f *flag.Flag) { seen[f.Name] = true })
 	for _, r := range []string{"rv"} {
 		if !seen[r] {
-			return nil, errors.Errorf("missing required -%s argument/flag\n", r)
+			return nil, xerrors.Errorf("missing required -%s argument/flag\n", r)
 		}
 	}
 
@@ -40,14 +41,14 @@ func main() {
 	// Arguments
 	args, err := parseArgs()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("parseArgs: %+v\n", err)
 	}
 	ctx := context.Background()
 
 	// P2P Host
-	node, err := p2p.NewNodeByLite(ctx, args.Port, args.Rendezvous)
+	node, err := p2p.NewNode(ctx, args.Port, args.Rendezvous)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("newNode: %+v\n", err)
 	}
 	defer node.Close()
 
