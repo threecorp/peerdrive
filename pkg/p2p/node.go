@@ -174,7 +174,7 @@ func NewNode(ctx context.Context, port int, rendezvous string) (*Node, error) {
 }
 
 func (nd *Node) dsPutNotify(k datastore.Key, v []byte) {
-	fmt.Printf("Added: [%s] -> %d bytes\n", k, len(v))
+	// fmt.Printf("Added: [%s] -> %d bytes\n", k, len(v))
 	nd.DSPutCh <- lo.T2(k, v)
 }
 
