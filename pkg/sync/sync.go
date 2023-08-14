@@ -49,10 +49,10 @@ func Handler(nd *p2p.Node) func(stream network.Stream) {
 			switch ev.Op {
 			case event.Write:
 				err = ev.Write()
-				recvDispChanged(ev.Path)
+				event.DispRecver(ev)
 			case event.Remove:
 				err = ev.Remove()
-				recvDispDeleted(ev.Path)
+				event.DispRecver(ev)
 			default:
 				log.Printf("%s operator is not supported: %s ", peerID, ev.Op)
 				return
@@ -135,15 +135,15 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 			switch ev.Op {
 			case watcher.Move, watcher.Rename:
 				logFatal(notifyWrite(h, ev.Path, relPath))
-				sendDispChanged(relPath)
+				event.DispSendChanged(relPath)
 				logFatal(notifyDelete(h, oldPath))
-				sendDispDeleted(relPath)
+				event.DispSendDeleted(relPath)
 			case watcher.Create, watcher.Write:
 				logFatal(notifyWrite(h, ev.Path, relPath))
-				sendDispChanged(relPath)
+				event.DispSendChanged(relPath)
 			case watcher.Remove:
 				logFatal(notifyDelete(h, relPath))
-				sendDispDeleted(relPath)
+				event.DispSendDeleted(relPath)
 			}
 
 			time.AfterFunc(time.Second, func() { syncs.Remove(relPath) })

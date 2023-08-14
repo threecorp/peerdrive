@@ -41,7 +41,7 @@ func Handler(nd *p2p.Node) func(stream network.Stream) {
 					log.Printf("%s error read event from stream: %+v", peerID, err)
 					return
 				}
-				// recvDispChanged(ev.Path)
+				event.DispRecver(ev)
 				if err := event.WriteStream(stream, ev); err != nil {
 					log.Printf("%s error write event to stream: %+v", peerID, err)
 					return
@@ -79,7 +79,6 @@ func SnapWatcher(nd *p2p.Node, syncDir string) {
 			continue // myself
 		}
 		if !lo.Contains(p2p.Peers, snap.PeerID) {
-			println("caught other")
 			continue
 		}
 

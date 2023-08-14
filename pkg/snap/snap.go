@@ -86,13 +86,13 @@ func makeMetas(dir string) ([]*Meta, error) {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() && info.Name() == dev.PrivateKeyName {
-			return nil
-		}
 		for _, ig := range dev.IgnoreNames {
 			if info.IsDir() && info.Name() == ig {
 				return filepath.SkipDir
 			}
+		}
+		if !info.IsDir() && info.Name() == dev.PrivateKeyName {
+			return nil
 		}
 
 		metas = append(metas, &Meta{

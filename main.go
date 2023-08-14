@@ -52,6 +52,7 @@ func main() {
 		log.Fatalf("newNode: %+v\n", err)
 	}
 	defer node.Close()
+	log.Printf("Peer: %s\n", node.Host.ID())
 
 	// Packet
 	node.Host.SetStreamHandler(snap.Protocol, snap.Handler(node))

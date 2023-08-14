@@ -1,6 +1,7 @@
 package event
 
 import (
+	"io/ioutil"
 	"os"
 	"path"
 
@@ -61,17 +62,13 @@ func (ev *Event) Read() error {
 	}
 
 	// Open local's file
-	f, err := os.Open(ev.Path)
-	if err != nil {
-		return xerrors.Errorf("%s error open %s: %w", ev.String(), ev.Path, err)
-	}
-	defer f.Close()
-
 	// Read a data to local's file
-	if _, err := f.Read(ev.Data); err != nil {
-		return xerrors.Errorf("%s error read: %w", ev.String(), err)
+	data, err := ioutil.ReadFile(ev.Path)
+	if err != nil {
+		return xerrors.Errorf("%s error read %s: %w", ev.String(), ev.Path, err)
 	}
 
+	ev.Data = data
 	return nil
 }
 
