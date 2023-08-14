@@ -60,13 +60,11 @@ func main() {
 	log.Printf("Peer: %s\n", node.Host.ID())
 
 	// Packet
-	node.Host.SetStreamHandler(snap.Protocol, snap.Handler(node))
-	// node.Host.SetStreamHandler(sync.Protocol, sync.Handler(node))
-
-	// Snapshot
-	go snap.SnapWatcher(node, args.SyncDir)
+	node.Host.SetStreamHandler(snap.Protocol, snap.RWHandler(node))
 
 	// Synchornize
+	go snap.SnapWatcher(node, args.SyncDir)
+
+	// Event Watcher
 	snap.SyncWatcher(node, args.SyncDir)
-	// sync.SyncWatcher(node, args.SyncDir)
 }

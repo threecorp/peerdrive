@@ -25,7 +25,7 @@ var (
 	recvs = &dev.SafeSlice[string]{}
 )
 
-func Handler(nd *p2p.Node) func(stream network.Stream) {
+func RWHandler(nd *p2p.Node) func(stream network.Stream) {
 	return func(stream network.Stream) {
 		defer stream.Close()
 		peerID := stream.Conn().RemotePeer()
@@ -55,6 +55,44 @@ func Handler(nd *p2p.Node) func(stream network.Stream) {
 				}
 			default:
 				log.Printf("%s operator is not supported: %s ", peerID, ev.Op)
+				return
+			}
+		}
+	}
+}
+
+func WriteHandler(nd *p2p.Node) func(stream network.Stream) {
+	return func(stream network.Stream) {
+		defer stream.Close()
+		peerID := stream.Conn().RemotePeer()
+
+		for {
+			ev := &event.Event{}
+
+			err := event.ReadStream(stream, ev)
+			if err != nil && xerrors.Is(err, io.EOF) {
+				return
+			}
+			if ev == nil {
+				log.Printf("%s error read message from stream: %+v", peerID, err)
+				return
+			}
+
+			recvs.Append(ev.Path)
+			switch ev.Op {
+			case event.Write:
+				err = ev.Write()
+				event.DispRecver(ev)
+			case event.Remove:
+				err = ev.Remove()
+				event.DispRecver(ev)
+			default:
+				log.Printf("%s operator is not supported: %s ", peerID, ev.Op)
+				return
+			}
+			time.AfterFunc(time.Second, func() { recvs.Remove(ev.Path) })
+			if err != nil {
+				log.Printf("%s error operate message from stream: %+v", peerID, err)
 				return
 			}
 		}
