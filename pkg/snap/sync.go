@@ -136,7 +136,7 @@ func SnapWatcher(nd *p2p.Node, syncDir string) {
 }
 
 func SyncWatcher(nd *p2p.Node, syncDir string) {
-	h, w, wCh := nd.Host, watcher.New(), make(chan watcher.Event, 100)
+	w, wCh := watcher.New(), make(chan watcher.Event, 100)
 
 	go func() {
 		for {
@@ -158,6 +158,19 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 				if recvs.Contains(relPath) {
 					break
 				}
+				dev.UntilWritten(ev.Path)
+
+				syncs.Append(relPath)
+				switch ev.Op {
+				case watcher.Move, watcher.Rename:
+					event.DispSendChanged(relPath)
+					event.DispSendDeleted(relPath)
+				case watcher.Create, watcher.Write:
+					event.DispSendChanged(relPath)
+				case watcher.Remove:
+					event.DispSendDeleted(relPath)
+				}
+				time.AfterFunc(time.Second, func() { syncs.Remove(relPath) })
 
 				wCh <- ev
 			case err := <-w.Error:
@@ -170,38 +183,13 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 
 	go func() {
 		for {
-			ev := <-wCh
-			dev.UntilWritten(ev.Path)
+			_ = <-wCh
 
-			relPath := dev.RelativePath(syncDir, ev.Path)
-			syncs.Append(relPath)
-
-			sshot, err := Snapshot(h.ID(), syncDir)
-			if err != nil {
-				log.Printf("snapshot: %+v", err)
-				continue
-			}
-			data, err := sshot.Marshal()
-			if err != nil {
-				log.Printf("snapshot Marshal: %+v", err)
-				continue
-			}
-			if err := nd.DS.Put(context.Background(), SnapKey, data); err != nil {
-				log.Printf("snapshot ds.Put: %+v", err)
-				continue
+			if err := snapsnap(nd, syncDir); err != nil {
+				log.Printf("send snapshot: %+v\n", err)
 			}
 
-			switch ev.Op {
-			case watcher.Move, watcher.Rename:
-				event.DispSendChanged(relPath)
-				event.DispSendDeleted(relPath)
-			case watcher.Create, watcher.Write:
-				event.DispSendChanged(relPath)
-			case watcher.Remove:
-				event.DispSendDeleted(relPath)
-			}
-
-			time.AfterFunc(time.Second, func() { syncs.Remove(relPath) })
+			time.Sleep(10 * time.Second)
 		}
 	}()
 
@@ -214,4 +202,20 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 	if err := w.Start(time.Millisecond * 300); err != nil {
 		log.Fatalf("start watcher: %+v\n", err)
 	}
+}
+
+func snapsnap(nd *p2p.Node, syncDir string) error {
+	sshot, err := Snapshot(nd.Host.ID(), syncDir)
+	if err != nil {
+		return xerrors.Errorf("snapshot: %w", err)
+	}
+	data, err := sshot.Marshal()
+	if err != nil {
+		return xerrors.Errorf("snapshot Marshal: %w", err)
+	}
+	if err := nd.DS.Put(context.Background(), SnapKey, data); err != nil {
+		return xerrors.Errorf("snapshot ds.Put: %w", err)
+	}
+
+	return nil
 }
