@@ -92,7 +92,7 @@ func SnapWatcher(nd *p2p.Node, syncDir string) {
 			}
 			time.Sleep(1 * time.Second)
 
-			println(snap.PeerID, " try to ", meta.Path)
+			fmt.Printf("%s try to %s", snap.PeerID.String(), meta.Path)
 			ev, err := notifyRead(nd.Host, snap.PeerID, meta.Path)
 			if err != nil {
 				log.Printf("notifyRead(Add) failed: %+v\n", err)

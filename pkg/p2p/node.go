@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
@@ -94,7 +96,7 @@ func (n *Node) Close() error {
 
 // Default Behavior: https://pkg.go.dev/github.com/libp2p/go-libp2p#New
 func NewNode(ctx context.Context, port int, rendezvous string) (*Node, error) {
-	pkey, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
+	pkey, err := privKey()
 	if err != nil {
 		return nil, err
 	}
@@ -282,4 +284,33 @@ func NewMDNS(h host.Host, rendezvous string) (*discoveryMDNS, error) {
 	}
 
 	return n, nil
+}
+
+func privKey() (crypto.PrivKey, error) {
+	name := ".pkey"
+
+	// Restore pkey
+	if _, err := os.Stat(name); !os.IsNotExist(err) {
+		dat, err := ioutil.ReadFile(name)
+		if err != nil {
+			return nil, err
+		}
+
+		return crypto.UnmarshalPrivateKey(dat)
+	}
+
+	pkey, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	// Store Key
+	privBytes, err := crypto.MarshalPrivateKey(pkey)
+	if err != nil {
+		return nil, err
+	}
+	if err := ioutil.WriteFile(name, privBytes, 0644); err != nil {
+		return nil, err
+	}
+
+	return pkey, nil
 }
