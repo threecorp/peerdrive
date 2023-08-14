@@ -182,14 +182,22 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 	}()
 
 	go func() {
+		var (
+			lastTime time.Time
+			interval = 30 * time.Second
+		)
 		for {
 			_ = <-wCh
+			elapsed := time.Since(lastTime)
+			if elapsed < interval {
+				continue
+			}
 
 			if err := snapsnap(nd, syncDir); err != nil {
 				log.Printf("send snapshot: %+v\n", err)
 			}
 
-			time.Sleep(60 * time.Second)
+			lastTime = time.Now()
 		}
 	}()
 
