@@ -1,100 +1,71 @@
 package sync
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
-	"encoding/gob"
-	"fmt"
 	"io"
 	"log"
-	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
-
-	"github.com/ipfs/go-datastore"
+	"golang.org/x/xerrors"
 
 	"github.com/radovskyb/watcher"
 
+	"github.com/threecorp/peerdrive/pkg/dev"
+	"github.com/threecorp/peerdrive/pkg/event"
 	"github.com/threecorp/peerdrive/pkg/p2p"
-	"github.com/threecorp/peerdrive/pkg/sync/event"
+	"github.com/threecorp/peerdrive/pkg/snap"
 )
 
-const SyncProtocol = "/peerdrive/1.0.0"
+const Protocol = "/peerdrive/sync/1.0.0"
 
 var (
-	syncs = &SafeSlice[string]{}
-	recvs = &SafeSlice[string]{}
+	syncs = &dev.SafeSlice[string]{}
+	recvs = &dev.SafeSlice[string]{}
 )
 
-func SyncHandler(nd *p2p.Node) func(stream network.Stream) {
+func Handler(nd *p2p.Node) func(stream network.Stream) {
 	return func(stream network.Stream) {
 		defer stream.Close()
 		peerID := stream.Conn().RemotePeer()
 
 		for {
-			packetSize := make([]byte, 4)
-			if _, err := io.ReadFull(stream, packetSize); err != nil {
-				if err != io.EOF {
-					log.Printf("%s error reading length from stream: %+v", peerID, err)
-				}
-				return
-			}
-			data := make([]byte, binary.BigEndian.Uint32(packetSize))
-			if _, err := io.ReadFull(stream, data); err != nil {
-				log.Printf("%s error reading message from stream: %+v", peerID, err)
-				return
-			}
 			ev := &event.Event{}
-			if err := gob.NewDecoder(bytes.NewBuffer(data)).Decode(&ev); err != nil {
-				log.Printf("%s error reading message from stream: %+v", peerID, err)
+
+			err := event.ReadStream(stream, ev)
+			if err != nil && xerrors.Is(err, io.EOF) {
 				return
 			}
+			if ev == nil {
+				log.Printf("%s error read message from stream: %+v", peerID, err)
+				return
+			}
+
 			recvs.Append(ev.Path)
-			var err error
 			switch ev.Op {
-			case event.Copy:
-				err = ev.Copy()
-				recvDispChanged(ev.Path)
-			case event.Delete:
-				err = ev.Delete()
-				recvDispDeleted(ev.Path)
+			case event.Write:
+				err = ev.Write()
+				event.DispRecver(ev)
+			case event.Remove:
+				err = ev.Remove()
+				event.DispRecver(ev)
+			default:
+				log.Printf("%s operator is not supported: %s ", peerID, ev.Op)
+				return
 			}
 			time.AfterFunc(time.Second, func() { recvs.Remove(ev.Path) })
 			if err != nil {
 				log.Printf("%s error operate message from stream: %+v", peerID, err)
 				return
 			}
-
-			if runtime.GOOS != "darwin" {
-				r, e := nd.DS.Get(context.Background(), datastore.NewKey("mydatakey"))
-				fmt.Printf("Read: %s(%+v)", r, e)
-			}
 		}
 	}
 }
 
 func SyncWatcher(nd *p2p.Node, syncDir string) {
-	var (
-		h       = nd.Host
-		w       = watcher.New()
-		watchCh = make(chan watcher.Event, 100)
-		err     error
-	)
-
-	if syncDir == "" {
-		if syncDir, err = os.Getwd(); err != nil {
-			log.Fatalf("pwd: %+v\n", err)
-		}
-	}
-	syncDir, err = filepath.Abs(syncDir)
-	if err != nil {
-		log.Fatalf("abs path: %+v\n", err)
-	}
+	h, w, wCh := nd.Host, watcher.New(), make(chan watcher.Event, 100)
 
 	go func() {
 		for {
@@ -117,7 +88,7 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 					break
 				}
 
-				watchCh <- ev
+				wCh <- ev
 			case err := <-w.Error:
 				log.Fatalf("watcher: %+v\n", err)
 			case <-w.Closed:
@@ -128,28 +99,34 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 
 	go func() {
 		for {
-			ev := <-watchCh
-			untilWritten(ev.Path)
+			ev := <-wCh
+			dev.UntilWritten(ev.Path)
 
 			relPath, oldPath := paths(syncDir, ev)
 			syncs.Append(relPath)
 
 			if runtime.GOOS == "darwin" {
-				logFatal(nd.DS.Put(context.Background(), datastore.NewKey("mydatakey"), []byte("value 1")))
+				sshot, err := snap.Snapshot(h.ID(), syncDir)
+				logFatal(err)
+
+				data, err := sshot.Marshal()
+				logFatal(err)
+
+				logFatal(nd.DS.Put(context.Background(), snap.SnapKey, data))
 			}
 
 			switch ev.Op {
 			case watcher.Move, watcher.Rename:
-				logFatal(notifyCopy(h, ev.Path, relPath))
-				sendDispChanged(relPath)
+				logFatal(notifyWrite(h, ev.Path, relPath))
+				event.DispSendChanged(relPath)
 				logFatal(notifyDelete(h, oldPath))
-				sendDispDeleted(relPath)
+				event.DispSendDeleted(relPath)
 			case watcher.Create, watcher.Write:
-				logFatal(notifyCopy(h, ev.Path, relPath))
-				sendDispChanged(relPath)
+				logFatal(notifyWrite(h, ev.Path, relPath))
+				event.DispSendChanged(relPath)
 			case watcher.Remove:
 				logFatal(notifyDelete(h, relPath))
-				sendDispDeleted(relPath)
+				event.DispSendDeleted(relPath)
 			}
 
 			time.AfterFunc(time.Second, func() { syncs.Remove(relPath) })
@@ -159,7 +136,7 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 	if err := w.AddRecursive("./"); err != nil {
 		log.Fatalf("recursive watcher: %+v\n", err)
 	}
-	if err := w.Ignore(".git", fmt.Sprintf(".%s", p2p.DSName)); err != nil {
+	if err := w.Ignore(dev.IgnoreNames...); err != nil {
 		log.Fatalf("ignore watcher: %+v\n", err)
 	}
 	if err := w.Start(time.Millisecond * 300); err != nil {

@@ -1,4 +1,4 @@
-package sync
+package event
 
 import (
 	"fmt"
@@ -6,25 +6,46 @@ import (
 	"github.com/gookit/color"
 )
 
-func sendDispChanged(path string) {
+func dispStyle(ev *Event) func(a ...any) string {
+	switch ev.Op {
+	case Write:
+		return color.New(color.FgLightGreen, color.Bold).Render
+	case Read:
+		return color.New(color.Gray, color.Bold).Render
+	case Remove:
+		return color.New(color.FgLightRed, color.Bold).Render
+	default:
+		return color.New(color.FgWhite).Render
+	}
+}
+
+func DispSender(ev *Event) {
+	fmt.Printf("%s %s %s\n", "⫸", dispStyle(ev)(ev.String()), color.Gray.Render(ev.Path))
+}
+
+func DispRecver(ev *Event) {
+	fmt.Printf("%s %s %s\n", "⫷", dispStyle(ev)(ev.String()), color.Gray.Render(ev.Path))
+}
+
+func DispSendChanged(path string) {
 	eventColor := color.New(color.FgLightGreen, color.Bold).Render
 	pathColor := color.New(color.Gray, color.Bold).Render
 	fmt.Printf("%s %s %s\n", "⫸", eventColor("Changed"), pathColor(path))
 }
 
-func sendDispDeleted(path string) {
+func DispSendDeleted(path string) {
 	eventColor := color.New(color.FgLightRed, color.Bold).Render
 	pathColor := color.New(color.Gray, color.Bold).Render
 	fmt.Printf("%s %s %s\n", "⫸", eventColor("Deleted"), pathColor(path))
 }
 
-func recvDispChanged(path string) {
+func DispRecvChanged(path string) {
 	eventColor := color.New(color.FgLightGreen, color.Bold).Render
 	pathColor := color.New(color.Gray, color.Bold).Render
 	fmt.Printf("%s %s %s\n", "⫷", eventColor("Changed"), pathColor(path))
 }
 
-func recvDispDeleted(path string) {
+func DispRecvDeleted(path string) {
 	eventColor := color.New(color.FgLightRed, color.Bold).Render
 	pathColor := color.New(color.Gray, color.Bold).Render
 	fmt.Printf("%s %s %s\n", "⫷", eventColor("Deleted"), pathColor(path))

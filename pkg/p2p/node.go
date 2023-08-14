@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
@@ -15,20 +17,24 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	"github.com/libp2p/go-libp2p/p2p/discovery/util"
+	"github.com/threecorp/peerdrive/pkg/dev"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
 	"github.com/ipfs/go-datastore"
 
-	ipfslite "github.com/hsanjuan/ipfs-lite"
 	badger "github.com/ipfs/go-ds-badger"
 	crdt "github.com/ipfs/go-ds-crdt"
 
-	"github.com/hashicorp/go-multierror"
+	ipfslite "github.com/hsanjuan/ipfs-lite"
+
 	"github.com/multiformats/go-multiaddr"
 	"github.com/samber/lo"
+	"go.uber.org/multierr"
 )
+
+// Peers
 
 var (
 	defaultBootstrapPeers     = dht.DefaultBootstrapPeers
@@ -61,20 +67,28 @@ func (pl *PeerList) AppendUnique(ids ...peer.ID) bool {
 
 var Peers = PeerList{}
 
+// Datastore arranges to other folder
+
 const (
-	DSName = "snap"
+	DSName = dev.DatastoreName
+)
+
+var (
+	DSKey = datastore.NewKey(DSName)
 )
 
 type Node struct {
 	Host       host.Host
-	IPFS       *ipfslite.Peer
+	Lite       *ipfslite.Peer
 	DHT        *dual.DHT       // routing.Routing
 	DS         *crdt.Datastore // datastore.Batching
+	DSPutCh    chan lo.Tuple2[datastore.Key, []byte]
+	DSDelCh    chan datastore.Key
 	Rendezvous string
 }
 
 func (n *Node) Close() error {
-	return multierror.Append(
+	return multierr.Combine(
 		n.Host.Close(),
 		n.DHT.Close(),
 		n.DS.Close(),
@@ -83,7 +97,7 @@ func (n *Node) Close() error {
 
 // Default Behavior: https://pkg.go.dev/github.com/libp2p/go-libp2p#New
 func NewNode(ctx context.Context, port int, rendezvous string) (*Node, error) {
-	pkey, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
+	pkey, err := privKey()
 	if err != nil {
 		return nil, err
 	}
@@ -114,15 +128,15 @@ func NewNode(ctx context.Context, port int, rendezvous string) (*Node, error) {
 		return nil, err
 	}
 
-	badgerDS, err := badger.NewDatastore(fmt.Sprintf("./.%s", DSName), &badger.DefaultOptions)
+	badgerDS, err := badger.NewDatastore(fmt.Sprintf("./%s", DSName), &badger.DefaultOptions)
 	if err != nil {
 		return nil, err
 	}
-	ipfs, err := ipfslite.New(ctx, badgerDS, nil, h, dht, nil)
+	lite, err := ipfslite.New(ctx, badgerDS, nil, h, dht, nil)
 	if err != nil {
 		return nil, err
 	}
-	ipfs.Bootstrap(defaultBootstrapPeersInfo)
+	lite.Bootstrap(defaultBootstrapPeersInfo)
 
 	psub, err := pubsub.NewGossipSub(ctx, h)
 	if err != nil {
@@ -135,22 +149,39 @@ func NewNode(ctx context.Context, port int, rendezvous string) (*Node, error) {
 	// more setups
 	// DAGService
 	// dags := ...
+
+	n := &Node{
+		Host:       h,
+		DHT:        dht,
+		Lite:       lite,
+		DSPutCh:    make(chan lo.Tuple2[datastore.Key, []byte]),
+		DSDelCh:    make(chan datastore.Key),
+		Rendezvous: rendezvous,
+	}
+
 	crdtOpts := crdt.DefaultOptions()
 	crdtOpts.RebroadcastInterval = 5 * time.Second
-	crdtOpts.PutHook = func(k datastore.Key, v []byte) {
-		fmt.Printf("Added: [%s] -> %d bytes\n", k, len(v))
-	}
-	crdtOpts.DeleteHook = func(k datastore.Key) {
-		fmt.Printf("Removed: [%s]\n", k)
-	}
-	crdtDS, err := crdt.New(badgerDS, datastore.NewKey(DSName), ipfs, bcast, crdtOpts)
+	crdtOpts.PutHook = func(k datastore.Key, v []byte) { n.dsPutNotify(k, v) }
+	crdtOpts.DeleteHook = func(k datastore.Key) { n.dsDeletedNotify(k) }
+	crdtDS, err := crdt.New(badgerDS, DSKey, lite, bcast, crdtOpts)
 	if err != nil {
 		return nil, err
 	}
+	n.DS = crdtDS
 
-	n := &Node{Host: h, DHT: dht, DS: crdtDS, IPFS: ipfs, Rendezvous: rendezvous}
 	go n.run(psub)
 	return n, nil
+}
+
+func (nd *Node) dsPutNotify(k datastore.Key, v []byte) {
+	fmt.Printf("Added: [%s] -> %d bytes\n", k, len(v))
+	nd.DSPutCh <- lo.T2(k, v)
+}
+
+func (nd *Node) dsDeletedNotify(k datastore.Key) {
+	// fmt.Printf("Removed: [%s]\n", k)
+	// nd.DSDelCh <- k
+	panic("Not implemented yet")
 }
 
 func (nd *Node) run(psub *pubsub.PubSub) {
@@ -254,4 +285,33 @@ func NewMDNS(h host.Host, rendezvous string) (*discoveryMDNS, error) {
 	}
 
 	return n, nil
+}
+
+func privKey() (crypto.PrivKey, error) {
+	name := dev.PrivateKeyName
+
+	// Restore pkey
+	if _, err := os.Stat(name); !os.IsNotExist(err) {
+		dat, err := ioutil.ReadFile(name)
+		if err != nil {
+			return nil, err
+		}
+
+		return crypto.UnmarshalPrivateKey(dat)
+	}
+
+	pkey, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	// Store Key
+	privBytes, err := crypto.MarshalPrivateKey(pkey)
+	if err != nil {
+		return nil, err
+	}
+	if err := ioutil.WriteFile(name, privBytes, 0644); err != nil {
+		return nil, err
+	}
+
+	return pkey, nil
 }

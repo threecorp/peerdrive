@@ -4,11 +4,12 @@ import (
 	"context"
 	"flag"
 	"log"
+	"path/filepath"
 
 	"golang.org/x/xerrors"
 
 	"github.com/threecorp/peerdrive/pkg/p2p"
-	"github.com/threecorp/peerdrive/pkg/sync"
+	"github.com/threecorp/peerdrive/pkg/snap"
 )
 
 type args struct {
@@ -30,9 +31,14 @@ func parseArgs() (*args, error) {
 	flag.Visit(func(f *flag.Flag) { seen[f.Name] = true })
 	for _, r := range []string{"rv"} {
 		if !seen[r] {
-			return nil, xerrors.Errorf("missing required -%s argument/flag\n", r)
+			return nil, xerrors.Errorf("missing required -%s argument/flag", r)
 		}
 	}
+	syncDir, err := filepath.Abs(a.SyncDir)
+	if err != nil {
+		return nil, xerrors.Errorf("required -sdir argument/flag: %w", err)
+	}
+	a.SyncDir = syncDir
 
 	return a, nil
 }
@@ -51,10 +57,16 @@ func main() {
 		log.Fatalf("newNode: %+v\n", err)
 	}
 	defer node.Close()
+	log.Printf("Peer: %s\n", node.Host.ID())
 
 	// Packet
-	node.Host.SetStreamHandler(sync.SyncProtocol, sync.SyncHandler(node))
+	node.Host.SetStreamHandler(snap.Protocol, snap.Handler(node))
+	// node.Host.SetStreamHandler(sync.Protocol, sync.Handler(node))
+
+	// Snapshot
+	go snap.SnapWatcher(node, args.SyncDir)
 
 	// Synchornize
-	sync.SyncWatcher(node, args.SyncDir)
+	snap.SyncWatcher(node, args.SyncDir)
+	// sync.SyncWatcher(node, args.SyncDir)
 }
