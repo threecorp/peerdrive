@@ -1,21 +1,29 @@
 package snap
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
-	"os"
-	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/radovskyb/watcher"
 	"github.com/samber/lo"
 	"golang.org/x/xerrors"
 
+	"github.com/threecorp/peerdrive/pkg/dev"
 	"github.com/threecorp/peerdrive/pkg/event"
 	"github.com/threecorp/peerdrive/pkg/p2p"
 )
 
 const Protocol = "/peerdrive/snap/1.0.0"
+
+var (
+	syncs = &dev.SafeSlice[string]{}
+	recvs = &dev.SafeSlice[string]{}
+)
 
 func Handler(nd *p2p.Node) func(stream network.Stream) {
 	return func(stream network.Stream) {
@@ -34,7 +42,6 @@ func Handler(nd *p2p.Node) func(stream network.Stream) {
 				return
 			}
 
-			// recvs.Append(ev.Path)
 			switch ev.Op {
 			case event.Read:
 				if err := ev.Read(); err != nil {
@@ -50,24 +57,11 @@ func Handler(nd *p2p.Node) func(stream network.Stream) {
 				log.Printf("%s operator is not supported: %s ", peerID, ev.Op)
 				return
 			}
-			// time.AfterFunc(time.Second, func() { recvs.Remove(ev.Path) })
 		}
 	}
 }
 
 func SnapWatcher(nd *p2p.Node, syncDir string) {
-	var err error
-
-	if syncDir == "" {
-		if syncDir, err = os.Getwd(); err != nil {
-			log.Fatalf("pwd: %+v\n", err)
-		}
-	}
-	syncDir, err = filepath.Abs(syncDir)
-	if err != nil {
-		log.Fatalf("abs path: %+v\n", err)
-	}
-
 	for {
 		kv := <-nd.DSPutCh
 		snap, err := Restore(kv.B)
@@ -97,7 +91,14 @@ func SnapWatcher(nd *p2p.Node, syncDir string) {
 				log.Printf("notifyRead(Add) failed: %+v\n", err)
 				continue
 			}
+
 			fmt.Printf("ADD(%s) %d: %s\n", ev.Op.String(), len(ev.Data), ev.Path)
+
+			recvs.Append(ev.Path)
+			if err := ev.Write(); err != nil {
+				log.Printf("write read stream(Add) failed: %+v\n", err)
+			}
+			time.AfterFunc(time.Second, func() { recvs.Remove(ev.Path) })
 		}
 		for _, meta := range diff.Modifies {
 			if meta.IsDir {
@@ -109,7 +110,14 @@ func SnapWatcher(nd *p2p.Node, syncDir string) {
 				log.Printf("notifyRead(Modify) failed: %+v\n", err)
 				continue
 			}
+
 			fmt.Printf("MOD(%s) %d: %s\n", ev.Op.String(), len(ev.Data), ev.Path)
+
+			recvs.Append(ev.Path)
+			if err := ev.Write(); err != nil {
+				log.Printf("write read stream(Modify) failed: %+v\n", err)
+			}
+			time.AfterFunc(time.Second, func() { recvs.Remove(ev.Path) })
 		}
 		// for _, meta := range diff.Deletes {
 		//  if meta.IsDir {
@@ -117,5 +125,76 @@ func SnapWatcher(nd *p2p.Node, syncDir string) {
 		//  }
 		//  // TODO: delete to meta.Path
 		// }
+	}
+}
+
+func SyncWatcher(nd *p2p.Node, syncDir string) {
+	h, w, wCh := nd.Host, watcher.New(), make(chan watcher.Event, 100)
+
+	go func() {
+		for {
+			select {
+			case ev := <-w.Event:
+				if strings.HasPrefix(ev.Name(), ".") {
+					break
+				}
+				if ev.Op == watcher.Chmod {
+					break
+				}
+				if ev.IsDir() {
+					break
+				}
+				relPath := dev.RelativePath(syncDir, ev.Path)
+				if syncs.Contains(relPath) {
+					break
+				}
+				if recvs.Contains(relPath) {
+					break
+				}
+
+				wCh <- ev
+			case err := <-w.Error:
+				log.Fatalf("watcher: %+v\n", err)
+			case <-w.Closed:
+				return
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			ev := <-wCh
+			dev.UntilWritten(ev.Path)
+
+			relPath := dev.RelativePath(syncDir, ev.Path)
+			syncs.Append(relPath)
+
+			sshot, err := Snapshot(h.ID(), syncDir)
+			if err != nil {
+				log.Printf("snapshot: %+v", err)
+				continue
+			}
+			data, err := sshot.Marshal()
+			if err != nil {
+				log.Printf("snapshot Marshal: %+v", err)
+				continue
+			}
+			if err := nd.DS.Put(context.Background(), SnapKey, data); err != nil {
+				log.Printf("snapshot ds.Put: %+v", err)
+				continue
+			}
+
+			time.AfterFunc(time.Second, func() { syncs.Remove(relPath) })
+		}
+	}()
+
+	if err := w.AddRecursive("./"); err != nil {
+		log.Fatalf("recursive watcher: %+v\n", err)
+	}
+	if err := w.Ignore(dev.IgnoreNames...); err != nil {
+		log.Fatalf("ignore watcher: %+v\n", err)
+	}
+	if err := w.Start(time.Millisecond * 300); err != nil {
+		log.Fatalf("start watcher: %+v\n", err)
 	}
 }

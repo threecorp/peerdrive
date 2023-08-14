@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"path/filepath"
 
 	"golang.org/x/xerrors"
 
@@ -31,9 +32,14 @@ func parseArgs() (*args, error) {
 	flag.Visit(func(f *flag.Flag) { seen[f.Name] = true })
 	for _, r := range []string{"rv"} {
 		if !seen[r] {
-			return nil, xerrors.Errorf("missing required -%s argument/flag\n", r)
+			return nil, xerrors.Errorf("missing required -%s argument/flag", r)
 		}
 	}
+	syncDir, err := filepath.Abs(a.SyncDir)
+	if err != nil {
+		return nil, xerrors.Errorf("required -sdir argument/flag: %w", err)
+	}
+	a.SyncDir = syncDir
 
 	return a, nil
 }
@@ -62,5 +68,6 @@ func main() {
 	go snap.SnapWatcher(node, args.SyncDir)
 
 	// Synchornize
-	sync.SyncWatcher(node, args.SyncDir)
+	snap.SyncWatcher(node, args.SyncDir)
+	// sync.SyncWatcher(node, args.SyncDir)
 }

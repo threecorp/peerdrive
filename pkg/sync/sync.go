@@ -4,8 +4,6 @@ import (
 	"context"
 	"io"
 	"log"
-	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -24,8 +22,8 @@ import (
 const Protocol = "/peerdrive/sync/1.0.0"
 
 var (
-	syncs = &SafeSlice[string]{}
-	recvs = &SafeSlice[string]{}
+	syncs = &dev.SafeSlice[string]{}
+	recvs = &dev.SafeSlice[string]{}
 )
 
 func Handler(nd *p2p.Node) func(stream network.Stream) {
@@ -67,22 +65,7 @@ func Handler(nd *p2p.Node) func(stream network.Stream) {
 }
 
 func SyncWatcher(nd *p2p.Node, syncDir string) {
-	var (
-		h       = nd.Host
-		w       = watcher.New()
-		watchCh = make(chan watcher.Event, 100)
-		err     error
-	)
-
-	if syncDir == "" {
-		if syncDir, err = os.Getwd(); err != nil {
-			log.Fatalf("pwd: %+v\n", err)
-		}
-	}
-	syncDir, err = filepath.Abs(syncDir)
-	if err != nil {
-		log.Fatalf("abs path: %+v\n", err)
-	}
+	h, w, wCh := nd.Host, watcher.New(), make(chan watcher.Event, 100)
 
 	go func() {
 		for {
@@ -105,7 +88,7 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 					break
 				}
 
-				watchCh <- ev
+				wCh <- ev
 			case err := <-w.Error:
 				log.Fatalf("watcher: %+v\n", err)
 			case <-w.Closed:
@@ -116,8 +99,8 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 
 	go func() {
 		for {
-			ev := <-watchCh
-			untilWritten(ev.Path)
+			ev := <-wCh
+			dev.UntilWritten(ev.Path)
 
 			relPath, oldPath := paths(syncDir, ev)
 			syncs.Append(relPath)

@@ -96,7 +96,7 @@ func makeMetas(dir string) ([]*Meta, error) {
 		}
 
 		metas = append(metas, &Meta{
-			Path:    path,
+			Path:    dev.RelativePath(dir, path),
 			Name:    info.Name(),
 			Size:    info.Size(),
 			ModTime: info.ModTime(),
