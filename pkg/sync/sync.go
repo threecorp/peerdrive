@@ -1,12 +1,8 @@
 package sync
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
-	"encoding/gob"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -16,63 +12,53 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/network"
 
-	"github.com/ipfs/go-datastore"
-
 	"github.com/radovskyb/watcher"
 
+	"github.com/threecorp/peerdrive/pkg/event"
 	"github.com/threecorp/peerdrive/pkg/p2p"
-	"github.com/threecorp/peerdrive/pkg/sync/event"
+	"github.com/threecorp/peerdrive/pkg/snap"
 )
 
-const SyncProtocol = "/peerdrive/1.0.0"
+const Protocol = "/peerdrive/sync/1.0.0"
 
 var (
 	syncs = &SafeSlice[string]{}
 	recvs = &SafeSlice[string]{}
 )
 
-func SyncHandler(nd *p2p.Node) func(stream network.Stream) {
+func Handler(nd *p2p.Node) func(stream network.Stream) {
 	return func(stream network.Stream) {
 		defer stream.Close()
 		peerID := stream.Conn().RemotePeer()
 
 		for {
-			packetSize := make([]byte, 4)
-			if _, err := io.ReadFull(stream, packetSize); err != nil {
-				if err != io.EOF {
-					log.Printf("%s error reading length from stream: %+v", peerID, err)
-				}
-				return
-			}
-			data := make([]byte, binary.BigEndian.Uint32(packetSize))
-			if _, err := io.ReadFull(stream, data); err != nil {
-				log.Printf("%s error reading message from stream: %+v", peerID, err)
-				return
-			}
 			ev := &event.Event{}
-			if err := gob.NewDecoder(bytes.NewBuffer(data)).Decode(&ev); err != nil {
-				log.Printf("%s error reading message from stream: %+v", peerID, err)
+
+			err := event.ReadStream(stream, ev)
+			if err != nil {
+				log.Printf("%s error read message from stream: %+v", peerID, err)
 				return
 			}
+			if ev == nil {
+				return // EOF
+			}
+
 			recvs.Append(ev.Path)
-			var err error
 			switch ev.Op {
-			case event.Copy:
-				err = ev.Copy()
+			case event.Write:
+				err = ev.Write()
 				recvDispChanged(ev.Path)
-			case event.Delete:
-				err = ev.Delete()
+			case event.Remove:
+				err = ev.Remove()
 				recvDispDeleted(ev.Path)
+			default:
+				log.Printf("%s operator is not supported: %s ", peerID, ev.Op)
+				return
 			}
 			time.AfterFunc(time.Second, func() { recvs.Remove(ev.Path) })
 			if err != nil {
 				log.Printf("%s error operate message from stream: %+v", peerID, err)
 				return
-			}
-
-			if runtime.GOOS != "darwin" {
-				r, e := nd.DS.Get(context.Background(), datastore.NewKey("mydatakey"))
-				fmt.Printf("Read: %s(%+v)", r, e)
 			}
 		}
 	}
@@ -135,17 +121,23 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 			syncs.Append(relPath)
 
 			if runtime.GOOS == "darwin" {
-				logFatal(nd.DS.Put(context.Background(), datastore.NewKey("mydatakey"), []byte("value 1")))
+				sshot, err := snap.Snapshot(h.ID(), syncDir)
+				logFatal(err)
+
+				data, err := sshot.Marshal()
+				logFatal(err)
+
+				logFatal(nd.DS.Put(context.Background(), snap.SnapKey, data))
 			}
 
 			switch ev.Op {
 			case watcher.Move, watcher.Rename:
-				logFatal(notifyCopy(h, ev.Path, relPath))
+				logFatal(notifyWrite(h, ev.Path, relPath))
 				sendDispChanged(relPath)
 				logFatal(notifyDelete(h, oldPath))
 				sendDispDeleted(relPath)
 			case watcher.Create, watcher.Write:
-				logFatal(notifyCopy(h, ev.Path, relPath))
+				logFatal(notifyWrite(h, ev.Path, relPath))
 				sendDispChanged(relPath)
 			case watcher.Remove:
 				logFatal(notifyDelete(h, relPath))

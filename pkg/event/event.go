@@ -1,7 +1,6 @@
 package event
 
 import (
-	"log"
 	"os"
 	"path"
 
@@ -11,13 +10,15 @@ import (
 type Op uint
 
 const (
-	Copy Op = iota
-	Delete
+	Write Op = iota
+	Read
+	Remove
 )
 
 var ops = map[Op]string{
-	Copy:   "COPY",
-	Delete: "DELETE",
+	Write:  "WRITE",
+	Read:   "READ",
+	Remove: "Remove",
 }
 
 func (e Op) String() string {
@@ -31,10 +32,9 @@ type Event struct {
 	Op
 	Path string
 	Data []byte
-	// PeerID peer.ID
 }
 
-func (ev *Event) Copy() error {
+func (ev *Event) Write() error {
 	// Create peer's dir
 	dir := path.Dir(ev.Path)
 	if err := os.MkdirAll(dir, 0750); err != nil {
@@ -43,7 +43,7 @@ func (ev *Event) Copy() error {
 	// Create peer's file
 	f, err := os.Create(ev.Path)
 	if err != nil {
-		log.Fatal(err)
+		return xerrors.Errorf("%s error open %s: %w", ev.String(), ev.Path, err)
 	}
 	defer f.Close()
 
@@ -55,7 +55,27 @@ func (ev *Event) Copy() error {
 	return nil
 }
 
-func (ev *Event) Delete() error {
+func (ev *Event) Read() error {
+	if len(ev.Data) == 0 {
+		return xerrors.Errorf("%s error Data is not blank", ev.String())
+	}
+
+	// Open local's file
+	f, err := os.Open(ev.Path)
+	if err != nil {
+		return xerrors.Errorf("%s error open %s: %w", ev.String(), ev.Path, err)
+	}
+	defer f.Close()
+
+	// Read a data to local's file
+	if _, err := f.Read(ev.Data); err != nil {
+		return xerrors.Errorf("%s error read: %w", ev.String(), err)
+	}
+
+	return nil
+}
+
+func (ev *Event) Remove() error {
 	if err := os.Remove(ev.Path); err != nil {
 		return xerrors.Errorf("%s error remove %s: %w", ev.String(), ev.Path, err)
 	}

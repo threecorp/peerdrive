@@ -53,7 +53,11 @@ func main() {
 	defer node.Close()
 
 	// Packet
-	node.Host.SetStreamHandler(sync.SyncProtocol, sync.SyncHandler(node))
+	// node.Host.SetStreamHandler(snap.Protocol, snap.Handler(node))
+	node.Host.SetStreamHandler(sync.Protocol, sync.Handler(node))
+
+	// Snapshot
+	// go snap.SnapWatcher(node, args.SyncDir)
 
 	// Synchornize
 	sync.SyncWatcher(node, args.SyncDir)

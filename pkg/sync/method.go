@@ -1,37 +1,34 @@
 package sync
 
 import (
-	"bufio"
-	"bytes"
 	"context"
-	"encoding/binary"
-	"encoding/gob"
 	"io/ioutil"
+
+	"golang.org/x/xerrors"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	"golang.org/x/xerrors"
 
 	"github.com/samber/lo"
 
+	"github.com/threecorp/peerdrive/pkg/event"
 	"github.com/threecorp/peerdrive/pkg/p2p"
-	"github.com/threecorp/peerdrive/pkg/sync/event"
 )
 
-func notifyCopy(h host.Host, path, relPath string) error {
+func notifyWrite(h host.Host, path, relPath string) error {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return xerrors.Errorf("notify copy failed: %w", err)
 	}
 
-	ev := &event.Event{Op: event.Copy, Path: relPath, Data: data}
-	return writeStreams(context.Background(), h, SyncProtocol, ev)
+	ev := &event.Event{Op: event.Write, Path: relPath, Data: data}
+	return writeStreams(context.Background(), h, Protocol, ev)
 }
 
 func notifyDelete(h host.Host, relPath string) error {
-	ev := &event.Event{Op: event.Delete, Path: relPath}
-	return writeStreams(context.Background(), h, SyncProtocol, ev)
+	ev := &event.Event{Op: event.Remove, Path: relPath}
+	return writeStreams(context.Background(), h, Protocol, ev)
 }
 
 func writeStreams(ctx context.Context, h host.Host, protocol protocol.ID, ev *event.Event) error {
@@ -51,25 +48,8 @@ func writeStream(ctx context.Context, h host.Host, protocol protocol.ID, peerID 
 	}
 	defer stream.Close()
 
-	b := bytes.NewBuffer(nil)
-	if err := gob.NewEncoder(b).Encode(ev); err != nil {
-		return xerrors.Errorf("%s error sending message encode: %w", peerID, err)
-	}
-	buf := b.Bytes()
-
-	packetSize := make([]byte, 4)
-	binary.BigEndian.PutUint32(packetSize, uint32(len(buf)))
-
-	writer := bufio.NewWriter(stream)
-	if _, err := writer.Write(packetSize); err != nil {
-		return xerrors.Errorf("%s error sending message length: %w", peerID, err)
-	}
-	// fmt.Printf("Write: %d\n", len(buf))
-	if _, err := writer.Write(buf); err != nil {
+	if err := event.WriteStream(stream, ev); err != nil {
 		return xerrors.Errorf("%s error sending message: %w", peerID, err)
-	}
-	if err := writer.Flush(); err != nil {
-		return xerrors.Errorf("%s error flushing writer: %w", peerID, err)
 	}
 
 	return nil
