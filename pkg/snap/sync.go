@@ -158,7 +158,6 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 				if recvs.Contains(relPath) {
 					break
 				}
-				dev.UntilWritten(ev.Path)
 
 				syncs.Append(relPath)
 				switch ev.Op {
@@ -187,12 +186,13 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 			interval = 30 * time.Second
 		)
 		for {
-			_ = <-wCh
+			ev := <-wCh
 			elapsed := time.Since(lastTime)
 			if elapsed < interval {
 				continue
 			}
 
+			dev.UntilWritten(ev.Path)
 			if err := snapsnap(nd, syncDir); err != nil {
 				log.Printf("send snapshot: %+v\n", err)
 			}
