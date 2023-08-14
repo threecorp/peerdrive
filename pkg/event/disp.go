@@ -27,16 +27,34 @@ func DispRecver(ev *Event) {
 	fmt.Printf("%s %s %s\n", "⫷", dispStyle(ev)(ev.String()), color.Gray.Render(ev.Path))
 }
 
+func DispSendRenamed(path string) {
+	eventColor := color.New(color.FgLightYellow, color.Bold).Render
+	pathColor := color.New(color.Gray, color.Bold).Render
+	fmt.Printf("%s %s %s\n", "⫸", eventColor("Renamed"), pathColor(path))
+}
+
+func DispSendCreated(path string) {
+	eventColor := color.New(color.FgLightBlue, color.Bold).Render
+	pathColor := color.New(color.Gray, color.Bold).Render
+	fmt.Printf("%s %s %s\n", "⫸", eventColor("Created"), pathColor(path))
+}
+
+func DispSendWritten(path string) {
+	eventColor := color.New(color.FgLightGreen, color.Bold).Render
+	pathColor := color.New(color.Gray, color.Bold).Render
+	fmt.Printf("%s %s %s\n", "⫸", eventColor("Written"), pathColor(path))
+}
+
+func DispSendRemoved(path string) {
+	eventColor := color.New(color.FgLightRed, color.Bold).Render
+	pathColor := color.New(color.Gray, color.Bold).Render
+	fmt.Printf("%s %s %s\n", "⫸", eventColor("Removed"), pathColor(path))
+}
+
 func DispSendChanged(path string) {
 	eventColor := color.New(color.FgLightGreen, color.Bold).Render
 	pathColor := color.New(color.Gray, color.Bold).Render
 	fmt.Printf("%s %s %s\n", "⫸", eventColor("Changed"), pathColor(path))
-}
-
-func DispSendDeleted(path string) {
-	eventColor := color.New(color.FgLightRed, color.Bold).Render
-	pathColor := color.New(color.Gray, color.Bold).Render
-	fmt.Printf("%s %s %s\n", "⫸", eventColor("Deleted"), pathColor(path))
 }
 
 func DispRecvChanged(path string) {

@@ -120,13 +120,13 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 				logFatal(notifyWrite(h, ev.Path, relPath))
 				event.DispSendChanged(relPath)
 				logFatal(notifyDelete(h, oldPath))
-				event.DispSendDeleted(relPath)
+				event.DispSendRemoved(relPath)
 			case watcher.Create, watcher.Write:
 				logFatal(notifyWrite(h, ev.Path, relPath))
 				event.DispSendChanged(relPath)
 			case watcher.Remove:
 				logFatal(notifyDelete(h, relPath))
-				event.DispSendDeleted(relPath)
+				event.DispSendRemoved(relPath)
 			}
 
 			time.AfterFunc(time.Second, func() { syncs.Remove(relPath) })

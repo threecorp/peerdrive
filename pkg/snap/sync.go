@@ -2,13 +2,14 @@ package snap
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"strings"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/radovskyb/watcher"
+	"github.com/rjeczalik/notify"
 	"github.com/samber/lo"
 	"golang.org/x/xerrors"
 
@@ -136,79 +137,57 @@ func SnapWatcher(nd *p2p.Node, syncDir string) {
 }
 
 func SyncWatcher(nd *p2p.Node, syncDir string) {
-	w, wCh := watcher.New(), make(chan watcher.Event, 100_000)
+	nCh := make(chan notify.EventInfo)
 
-	go func() {
-		for {
-			select {
-			case ev := <-w.Event:
-				if strings.HasPrefix(ev.Name(), ".") {
-					break
-				}
-				if ev.Op == watcher.Chmod {
-					break
-				}
-				if ev.IsDir() {
-					break
-				}
-				relPath := dev.RelativePath(syncDir, ev.Path)
-				if syncs.Contains(relPath) {
-					break
-				}
-				if recvs.Contains(relPath) {
-					break
-				}
+	if err := notify.Watch(fmt.Sprintf("%s/...", syncDir), nCh, notify.All); err != nil {
+		log.Fatalf("start watcher: %+v\n", err)
+	}
+	defer notify.Stop(nCh)
 
-				syncs.Append(relPath)
-				switch ev.Op {
-				case watcher.Move, watcher.Rename:
-					event.DispSendChanged(relPath)
-					event.DispSendDeleted(relPath)
-				case watcher.Create, watcher.Write:
-					event.DispSendChanged(relPath)
-				case watcher.Remove:
-					event.DispSendDeleted(relPath)
-				}
-				time.AfterFunc(time.Second, func() { syncs.Remove(relPath) })
+	for ev := range nCh {
+		relPath := dev.RelativePath(syncDir, ev.Path()) // basename := filepath.Base(ev.Path())
 
-				wCh <- ev
-			case err := <-w.Error:
-				log.Fatalf("watcher: %+v\n", err)
-			case <-w.Closed:
-				return
-			}
+		if syncs.Contains(relPath) {
+			continue // fmt.Printf("syncs: %s\n", relPath)
 		}
-	}()
+		if recvs.Contains(relPath) {
+			continue // fmt.Printf("recvs: %s\n", relPath)
+		}
+		ignores := lo.Filter(dev.IgnoreNames, func(ig string, _ int) bool {
+			return strings.HasPrefix(relPath, ig)
+		})
+		if len(ignores) != 0 {
+			continue // fmt.Printf("ignores: %s\n", relPath)
+		}
 
-	go func() {
+		syncs.Append(relPath)
+		switch ev.Event() {
+		case notify.Create:
+			event.DispSendCreated(relPath)
+		case notify.Remove:
+			event.DispSendRemoved(relPath)
+		case notify.Write:
+			event.DispSendWritten(relPath)
+		case notify.Rename:
+			event.DispSendRenamed(relPath)
+		}
+		time.AfterFunc(time.Second, func() { syncs.Remove(relPath) })
+
 		var (
 			lastTime time.Time
-			interval = 30 * time.Second
+			interval = 3 * time.Second
 		)
-		for {
-			ev := <-wCh
-			elapsed := time.Since(lastTime)
-			if elapsed < interval {
-				continue
-			}
 
-			dev.UntilWritten(ev.Path)
-			if err := snapsnap(nd, syncDir); err != nil {
-				log.Printf("send snapshot: %+v\n", err)
-			}
-
-			lastTime = time.Now()
+		elapsed := time.Since(lastTime)
+		if elapsed < interval {
+			continue
 		}
-	}()
+		dev.UntilWritten(ev.Path())
+		if err := snapsnap(nd, syncDir); err != nil {
+			log.Printf("send snapshot: %+v\n", err)
+		}
 
-	if err := w.AddRecursive("./"); err != nil {
-		log.Fatalf("recursive watcher: %+v\n", err)
-	}
-	if err := w.Ignore(dev.IgnoreNames...); err != nil {
-		log.Fatalf("ignore watcher: %+v\n", err)
-	}
-	if err := w.Start(time.Millisecond * 300); err != nil {
-		log.Fatalf("start watcher: %+v\n", err)
+		lastTime = time.Now()
 	}
 }
 
