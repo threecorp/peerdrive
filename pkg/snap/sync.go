@@ -10,6 +10,7 @@ import (
 
 	"github.com/k0kubun/pp"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/samber/lo"
 	"golang.org/x/xerrors"
 
 	"github.com/threecorp/peerdrive/pkg/event"
@@ -77,7 +78,12 @@ func SnapWatcher(nd *p2p.Node, syncDir string) {
 			continue
 		}
 		if nd.Host.ID() == snap.PeerID {
+			println("myself")
 			continue // myself
+		}
+		if !lo.Contains(p2p.Peers, snap.PeerID) {
+			println("caught other")
+			continue
 		}
 
 		diff, err := snap.Difference(syncDir)

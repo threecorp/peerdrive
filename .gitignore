@@ -23,3 +23,4 @@ go.work
 # Snapshot folder
 /.peerdrive
 /peerdrive
+/.pkey
