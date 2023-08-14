@@ -20,11 +20,11 @@ func dispStyle(ev *Event) func(a ...any) string {
 }
 
 func DispSender(ev *Event) {
-	fmt.Printf("%s %s %s\n", "⫸", dispStyle(ev)(ev.String()), ev.Path)
+	fmt.Printf("%s %s %s\n", "⫸", dispStyle(ev)(ev.String()), color.Gray.Render(ev.Path))
 }
 
 func DispRecver(ev *Event) {
-	fmt.Printf("%s %s %s\n", "⫷", dispStyle(ev)(ev.String()), ev.Path)
+	fmt.Printf("%s %s %s\n", "⫷", dispStyle(ev)(ev.String()), color.Gray.Render(ev.Path))
 }
 
 func DispSendChanged(path string) {

@@ -2,7 +2,6 @@ package snap
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log"
 	"strings"
@@ -85,46 +84,54 @@ func SnapWatcher(nd *p2p.Node, syncDir string) {
 			if meta.IsDir {
 				continue
 			}
-
 			ev, err := notifyRead(nd.Host, snap.PeerID, meta.Path)
 			if err != nil {
 				log.Printf("notifyRead(Add) failed: %+v\n", err)
 				continue
 			}
-
-			fmt.Printf("ADD(%s) %d: %s\n", ev.Op.String(), len(ev.Data), ev.Path)
+			ev.Op = event.Write
 
 			recvs.Append(ev.Path)
 			if err := ev.Write(); err != nil {
 				log.Printf("write read stream(Add) failed: %+v\n", err)
 			}
 			time.AfterFunc(time.Second, func() { recvs.Remove(ev.Path) })
+
+			event.DispRecver(ev)
 		}
 		for _, meta := range diff.Modifies {
 			if meta.IsDir {
 				continue
 			}
-
 			ev, err := notifyRead(nd.Host, snap.PeerID, meta.Path)
 			if err != nil {
 				log.Printf("notifyRead(Modify) failed: %+v\n", err)
 				continue
 			}
-
-			fmt.Printf("MOD(%s) %d: %s\n", ev.Op.String(), len(ev.Data), ev.Path)
+			ev.Op = event.Write
 
 			recvs.Append(ev.Path)
 			if err := ev.Write(); err != nil {
 				log.Printf("write read stream(Modify) failed: %+v\n", err)
 			}
 			time.AfterFunc(time.Second, func() { recvs.Remove(ev.Path) })
+
+			event.DispRecver(ev)
 		}
-		// for _, meta := range diff.Deletes {
-		//  if meta.IsDir {
-		//    continue
-		//  }
-		//  // TODO: delete to meta.Path
-		// }
+		for _, meta := range diff.Deletes {
+			if meta.IsDir {
+				continue
+			}
+			ev := &event.Event{Op: event.Remove, Path: meta.Path}
+
+			recvs.Append(ev.Path)
+			if err := ev.Remove(); err != nil {
+				log.Printf("delete file(Remove) failed: %+v\n", err)
+			}
+			time.AfterFunc(time.Second, func() { recvs.Remove(ev.Path) })
+
+			event.DispRecver(ev)
+		}
 	}
 }
 
@@ -182,6 +189,16 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 			if err := nd.DS.Put(context.Background(), SnapKey, data); err != nil {
 				log.Printf("snapshot ds.Put: %+v", err)
 				continue
+			}
+
+			switch ev.Op {
+			case watcher.Move, watcher.Rename:
+				event.DispSendChanged(relPath)
+				event.DispSendDeleted(relPath)
+			case watcher.Create, watcher.Write:
+				event.DispSendChanged(relPath)
+			case watcher.Remove:
+				event.DispSendDeleted(relPath)
 			}
 
 			time.AfterFunc(time.Second, func() { syncs.Remove(relPath) })

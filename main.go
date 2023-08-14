@@ -10,7 +10,6 @@ import (
 
 	"github.com/threecorp/peerdrive/pkg/p2p"
 	"github.com/threecorp/peerdrive/pkg/snap"
-	"github.com/threecorp/peerdrive/pkg/sync"
 )
 
 type args struct {
@@ -62,7 +61,7 @@ func main() {
 
 	// Packet
 	node.Host.SetStreamHandler(snap.Protocol, snap.Handler(node))
-	node.Host.SetStreamHandler(sync.Protocol, sync.Handler(node))
+	// node.Host.SetStreamHandler(sync.Protocol, sync.Handler(node))
 
 	// Snapshot
 	go snap.SnapWatcher(node, args.SyncDir)
