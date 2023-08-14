@@ -136,7 +136,7 @@ func SnapWatcher(nd *p2p.Node, syncDir string) {
 }
 
 func SyncWatcher(nd *p2p.Node, syncDir string) {
-	w, wCh := watcher.New(), make(chan watcher.Event, 100)
+	w, wCh := watcher.New(), make(chan watcher.Event, 100_000)
 
 	go func() {
 		for {
@@ -189,7 +189,7 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 				log.Printf("send snapshot: %+v\n", err)
 			}
 
-			time.Sleep(10 * time.Second)
+			time.Sleep(60 * time.Second)
 		}
 	}()
 
