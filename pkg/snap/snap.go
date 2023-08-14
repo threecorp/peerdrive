@@ -11,6 +11,7 @@ import (
 
 	"github.com/ipfs/go-datastore"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/threecorp/peerdrive/pkg/dev"
 )
 
 const (
@@ -84,6 +85,14 @@ func makeMetas(dir string) ([]*Meta, error) {
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
+		}
+		if !info.IsDir() && info.Name() == dev.PrivateKeyName {
+			return nil
+		}
+		for _, ig := range dev.IgnoreNames {
+			if info.IsDir() && info.Name() == ig {
+				return filepath.SkipDir
+			}
 		}
 
 		metas = append(metas, &Meta{

@@ -21,6 +21,7 @@
 go.work
 
 # Snapshot folder
-/.peerdrive
 /peerdrive
+/.peerdrive
+/.dssnap
 /.pkey

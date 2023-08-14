@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/radovskyb/watcher"
 
+	"github.com/threecorp/peerdrive/pkg/dev"
 	"github.com/threecorp/peerdrive/pkg/event"
 	"github.com/threecorp/peerdrive/pkg/p2p"
 	"github.com/threecorp/peerdrive/pkg/snap"
@@ -153,7 +153,7 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 	if err := w.AddRecursive("./"); err != nil {
 		log.Fatalf("recursive watcher: %+v\n", err)
 	}
-	if err := w.Ignore(".git", fmt.Sprintf(".%s", p2p.DSName)); err != nil {
+	if err := w.Ignore(dev.IgnoreNames...); err != nil {
 		log.Fatalf("ignore watcher: %+v\n", err)
 	}
 	if err := w.Start(time.Millisecond * 300); err != nil {

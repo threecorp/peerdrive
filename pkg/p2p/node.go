@@ -17,6 +17,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	"github.com/libp2p/go-libp2p/p2p/discovery/util"
+	"github.com/threecorp/peerdrive/pkg/dev"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -69,7 +70,7 @@ var Peers = PeerList{}
 // Datastore arranges to other folder
 
 const (
-	DSName = "peerdrive"
+	DSName = dev.DatastoreName
 )
 
 var (
@@ -127,7 +128,7 @@ func NewNode(ctx context.Context, port int, rendezvous string) (*Node, error) {
 		return nil, err
 	}
 
-	badgerDS, err := badger.NewDatastore(fmt.Sprintf("./.%s", DSName), &badger.DefaultOptions)
+	badgerDS, err := badger.NewDatastore(fmt.Sprintf("./%s", DSName), &badger.DefaultOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +288,7 @@ func NewMDNS(h host.Host, rendezvous string) (*discoveryMDNS, error) {
 }
 
 func privKey() (crypto.PrivKey, error) {
-	name := ".pkey"
+	name := dev.PrivateKeyName
 
 	// Restore pkey
 	if _, err := os.Stat(name); !os.IsNotExist(err) {
