@@ -38,15 +38,14 @@ func ReadStream(stream io.Reader, ev *Event) error {
 	packetSize := make([]byte, 4)
 
 	if _, err := io.ReadFull(stream, packetSize); err != nil {
-		return xerrors.Errorf("error read length from stream: %+v", err)
+		return xerrors.Errorf("error read length from stream: %w", err)
 	}
-
 	data := make([]byte, binary.BigEndian.Uint32(packetSize))
 	if _, err := io.ReadFull(stream, data); err != nil {
-		return xerrors.Errorf("error read message from stream: %+v", err)
+		return xerrors.Errorf("error read message from stream: %w", err)
 	}
 	if err := gob.NewDecoder(bytes.NewBuffer(data)).Decode(ev); err != nil {
-		return xerrors.Errorf("error read message from stream: %+v", err)
+		return xerrors.Errorf("error read message from stream: %w", err)
 	}
 
 	return nil

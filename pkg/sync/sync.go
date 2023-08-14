@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
+	"golang.org/x/xerrors"
 
 	"github.com/radovskyb/watcher"
 
@@ -35,12 +37,12 @@ func Handler(nd *p2p.Node) func(stream network.Stream) {
 			ev := &event.Event{}
 
 			err := event.ReadStream(stream, ev)
-			if err != nil {
-				log.Printf("%s error read message from stream: %+v", peerID, err)
+			if err != nil && xerrors.Is(err, io.EOF) {
 				return
 			}
 			if ev == nil {
-				return // EOF
+				log.Printf("%s error read message from stream: %+v", peerID, err)
+				return
 			}
 
 			recvs.Append(ev.Path)

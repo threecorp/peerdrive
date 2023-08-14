@@ -30,9 +30,9 @@ type (
 		IsDir   bool
 	}
 	Diff struct {
-		Add    []*Meta
-		Delete []*Meta
-		Modify []*Meta
+		Adds     []*Meta
+		Deletes  []*Meta
+		Modifies []*Meta
 	}
 	Snap struct {
 		PeerID peer.ID
@@ -119,17 +119,17 @@ func calcDiff(local, remote []*Meta) *Diff {
 		rsnap, ok := rmap[path]
 
 		if !ok {
-			diff.Delete = append(diff.Delete, lsnap)
+			diff.Deletes = append(diff.Deletes, lsnap)
 		} else if lsnap.Size != rsnap.Size {
-			diff.Modify = append(diff.Modify, lsnap)
+			diff.Modifies = append(diff.Modifies, lsnap)
 		} else if !lsnap.ModTime.Equal(rsnap.ModTime) {
-			diff.Modify = append(diff.Modify, lsnap)
+			diff.Modifies = append(diff.Modifies, lsnap)
 		}
 	}
 
 	for path, rsnap := range rmap {
 		if _, ok := lmap[path]; !ok {
-			diff.Add = append(diff.Add, rsnap)
+			diff.Adds = append(diff.Adds, rsnap)
 		}
 	}
 

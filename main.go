@@ -8,6 +8,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/threecorp/peerdrive/pkg/p2p"
+	"github.com/threecorp/peerdrive/pkg/snap"
 	"github.com/threecorp/peerdrive/pkg/sync"
 )
 
@@ -53,11 +54,11 @@ func main() {
 	defer node.Close()
 
 	// Packet
-	// node.Host.SetStreamHandler(snap.Protocol, snap.Handler(node))
+	node.Host.SetStreamHandler(snap.Protocol, snap.Handler(node))
 	node.Host.SetStreamHandler(sync.Protocol, sync.Handler(node))
 
 	// Snapshot
-	// go snap.SnapWatcher(node, args.SyncDir)
+	go snap.SnapWatcher(node, args.SyncDir)
 
 	// Synchornize
 	sync.SyncWatcher(node, args.SyncDir)

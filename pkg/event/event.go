@@ -56,8 +56,8 @@ func (ev *Event) Write() error {
 }
 
 func (ev *Event) Read() error {
-	if len(ev.Data) == 0 {
-		return xerrors.Errorf("%s error Data is not blank", ev.String())
+	if len(ev.Data) != 0 {
+		return xerrors.Errorf("%s error Data is not empty", ev.String())
 	}
 
 	// Open local's file

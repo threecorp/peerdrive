@@ -1,15 +1,16 @@
 package snap
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
-
-	"github.com/libp2p/go-libp2p/core/network"
-	"golang.org/x/xerrors"
+	"time"
 
 	"github.com/k0kubun/pp"
+	"github.com/libp2p/go-libp2p/core/network"
+	"golang.org/x/xerrors"
 
 	"github.com/threecorp/peerdrive/pkg/event"
 	"github.com/threecorp/peerdrive/pkg/p2p"
@@ -84,7 +85,40 @@ func SnapWatcher(nd *p2p.Node, syncDir string) {
 			log.Printf("diff(snap) failed: %+v\n", err)
 			continue
 		}
-
 		pp.Println(diff)
+		for _, meta := range diff.Adds {
+			if meta.IsDir {
+				continue
+			}
+			time.Sleep(1 * time.Second)
+
+			println(snap.PeerID, " try to ", meta.Path)
+			ev, err := notifyRead(nd.Host, snap.PeerID, meta.Path)
+			if err != nil {
+				log.Printf("notifyRead(Add) failed: %+v\n", err)
+				continue
+			}
+			fmt.Printf("%s %s %d", ev.Op.String(), ev.Path, len(ev.Data))
+		}
+		for _, meta := range diff.Modifies {
+			if meta.IsDir {
+				continue
+			}
+			time.Sleep(1 * time.Second)
+
+			println(snap.PeerID, " try to ", meta.Path)
+			ev, err := notifyRead(nd.Host, snap.PeerID, meta.Path)
+			if err != nil {
+				log.Printf("notifyRead(Modify) failed: %+v\n", err)
+				continue
+			}
+			fmt.Printf("%s %s %d", ev.Op.String(), ev.Path, len(ev.Data))
+		}
+		// for _, meta := range diff.Deletes {
+		//  if meta.IsDir {
+		//    continue
+		//  }
+		//  // TODO: delete to meta.Path
+		// }
 	}
 }
