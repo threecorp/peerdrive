@@ -129,9 +129,11 @@ func calcDiff(local, remote []*Meta) *Diff {
 
 		if !ok {
 			diff.Deletes = append(diff.Deletes, lsnap)
-		} else if lsnap.Size != rsnap.Size {
+		} else if lsnap.Size != rsnap.Size && !lsnap.IsDir {
+			// fmt.Printf("Mod size: %t Local:%d Remote:%d Path:%s\n", lsnap.Size != rsnap.Size, lsnap.Size, rsnap.Size, lsnap.Path)
 			diff.Modifies = append(diff.Modifies, lsnap)
-		} else if !lsnap.ModTime.Equal(rsnap.ModTime) {
+		} else if lsnap.ModTime.UnixNano() < rsnap.ModTime.UnixNano() && !lsnap.IsDir {
+			// fmt.Printf("Mod time: %t Local:%s Remote:%s Path:%s\n", lsnap.ModTime.UnixNano() < rsnap.ModTime.UnixNano(), lsnap.ModTime, rsnap.ModTime, lsnap.Path)
 			diff.Modifies = append(diff.Modifies, lsnap)
 		}
 	}

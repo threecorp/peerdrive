@@ -186,16 +186,19 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 		relPath := dev.RelativePath(syncDir, ev.Path()) // basename := filepath.Base(ev.Path())
 
 		if syncs.Contains(relPath) {
-			continue // fmt.Printf("syncs: %s\n", relPath)
+			// fmt.Printf("syncs: %s\n", relPath)
+			continue
 		}
 		if recvs.Contains(relPath) {
-			continue // fmt.Printf("recvs: %s\n", relPath)
+			// fmt.Printf("recvs: %s\n", relPath)
+			continue
 		}
 		ignores := lo.Filter(dev.IgnoreNames, func(ig string, _ int) bool {
 			return strings.HasPrefix(relPath, ig)
 		})
 		if len(ignores) != 0 {
-			continue // fmt.Printf("ignores: %s\n", relPath)
+			// fmt.Printf("ignores: %s\n", relPath)
+			continue
 		}
 
 		syncs.Append(relPath)
@@ -242,5 +245,6 @@ func snapsnap(nd *p2p.Node, syncDir string) error {
 		return xerrors.Errorf("snapshot ds.Put: %w", err)
 	}
 
+	// log.Printf("put snapshot: %d bytes\n", len(data))
 	return nil
 }
