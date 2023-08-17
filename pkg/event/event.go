@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"time"
 
 	"golang.org/x/xerrors"
 )
@@ -19,7 +20,7 @@ const (
 var ops = map[Op]string{
 	Write:  "WRITE",
 	Read:   "READ",
-	Remove: "Remove",
+	Remove: "REMOVE",
 }
 
 func (e Op) String() string {
@@ -33,6 +34,7 @@ type Event struct {
 	Op
 	Path string
 	Data []byte
+	Time time.Time
 }
 
 func (ev *Event) Write() error {
@@ -50,7 +52,13 @@ func (ev *Event) Write() error {
 
 	// Write a data to peer's file
 	if _, err := f.Write(ev.Data); err != nil {
-		return xerrors.Errorf("%s error write: %w", ev.String(), err)
+		return xerrors.Errorf("%s error write data: %w", ev.String(), err)
+	}
+	// Write a data to peer's file modtime
+	if !ev.Time.IsZero() {
+		if err := os.Chtimes(ev.Path, time.Now(), ev.Time); err != nil {
+			return xerrors.Errorf("%s error write modtime: %w", ev.String(), err)
+		}
 	}
 
 	return nil
@@ -67,8 +75,14 @@ func (ev *Event) Read() error {
 	if err != nil {
 		return xerrors.Errorf("%s error read %s: %w", ev.String(), ev.Path, err)
 	}
-
 	ev.Data = data
+
+	fi, err := os.Stat(ev.Path)
+	if err != nil {
+		return xerrors.Errorf("%s error info %s: %w", ev.String(), ev.Path, err)
+	}
+	ev.Time = fi.ModTime()
+
 	return nil
 }
 
