@@ -3,7 +3,6 @@ package snap
 import (
 	"bytes"
 	"encoding/gob"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -133,15 +132,13 @@ func calcDiff(local, remote []*Meta) *Diff {
 		rsnap, ok := rmap[path]
 
 		if !ok {
-			fmt.Printf("Delete: L:%+v\nDelete: R:%+v\n", lsnap, rsnap)
+			// fmt.Printf("Delete: L:%+v\nDelete: R:%+v\n", lsnap, rsnap)
 			diff.Deletes = append(diff.Deletes, lsnap)
 		} else if lsnap.Size != rsnap.Size {
-			fmt.Printf("ModSize: L:%+v\nModSize: R:%+v\n", lsnap, rsnap)
-			// fmt.Printf("ModSize: %t Local:%d Remote:%d Path:%s\n", lsnap.Size != rsnap.Size, lsnap.Size, rsnap.Size, lsnap.Path)
+			// fmt.Printf("ModSize: L:%+v\nModSize: R:%+v\n", lsnap, rsnap)
 			diff.Modifies = append(diff.Modifies, lsnap)
 		} else if lsnap.Time.UnixNano() < rsnap.Time.UnixNano() {
-			fmt.Printf("ModTime: L:%+v\nModTime: R:%+v\n", lsnap, rsnap)
-			// fmt.Printf("Mod time: %t Local:%s Remote:%s Path:%s\n", lsnap.ModTime.UnixNano() < rsnap.ModTime.UnixNano(), lsnap.ModTime, rsnap.ModTime, lsnap.Path)
+			// fmt.Printf("ModTime: L:%+v\nModTime: R:%+v\n", lsnap, rsnap)
 			diff.Modifies = append(diff.Modifies, lsnap)
 		}
 	}
