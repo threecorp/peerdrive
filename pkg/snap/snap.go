@@ -3,6 +3,7 @@ package snap
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -24,11 +25,11 @@ var (
 
 type (
 	Meta struct {
-		Path    string
-		Name    string
-		Size    int64
-		ModTime time.Time
-		IsDir   bool
+		Path  string
+		Name  string
+		Size  int64
+		Time  time.Time
+		IsDir bool
 	}
 	Diff struct {
 		Adds     []*Meta
@@ -96,11 +97,11 @@ func makeMetas(dir string) ([]*Meta, error) {
 		}
 
 		metas = append(metas, &Meta{
-			Path:    dev.RelativePath(dir, path),
-			Name:    info.Name(),
-			Size:    info.Size(),
-			ModTime: info.ModTime(),
-			IsDir:   info.IsDir(),
+			Path:  dev.RelativePath(dir, path),
+			Name:  info.Name(),
+			Size:  info.Size(),
+			Time:  info.ModTime(),
+			IsDir: info.IsDir(),
 		})
 
 		return nil
@@ -117,10 +118,14 @@ func calcDiff(local, remote []*Meta) *Diff {
 	rmap := make(map[string]*Meta)
 
 	for _, snap := range local {
-		lmap[snap.Path] = snap
+		if !snap.IsDir {
+			lmap[snap.Path] = snap
+		}
 	}
 	for _, snap := range remote {
-		rmap[snap.Path] = snap
+		if !snap.IsDir {
+			rmap[snap.Path] = snap
+		}
 	}
 
 	diff := &Diff{}
@@ -128,10 +133,15 @@ func calcDiff(local, remote []*Meta) *Diff {
 		rsnap, ok := rmap[path]
 
 		if !ok {
+			fmt.Printf("Delete: L:%+v\nDelete: R:%+v\n", lsnap, rsnap)
 			diff.Deletes = append(diff.Deletes, lsnap)
 		} else if lsnap.Size != rsnap.Size {
+			fmt.Printf("ModSize: L:%+v\nModSize: R:%+v\n", lsnap, rsnap)
+			// fmt.Printf("ModSize: %t Local:%d Remote:%d Path:%s\n", lsnap.Size != rsnap.Size, lsnap.Size, rsnap.Size, lsnap.Path)
 			diff.Modifies = append(diff.Modifies, lsnap)
-		} else if !lsnap.ModTime.Equal(rsnap.ModTime) {
+		} else if lsnap.Time.UnixNano() < rsnap.Time.UnixNano() {
+			fmt.Printf("ModTime: L:%+v\nModTime: R:%+v\n", lsnap, rsnap)
+			// fmt.Printf("Mod time: %t Local:%s Remote:%s Path:%s\n", lsnap.ModTime.UnixNano() < rsnap.ModTime.UnixNano(), lsnap.ModTime, rsnap.ModTime, lsnap.Path)
 			diff.Modifies = append(diff.Modifies, lsnap)
 		}
 	}
