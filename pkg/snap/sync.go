@@ -23,8 +23,8 @@ import (
 const Protocol = "/peerdrive/snap/1.0.0"
 
 var (
-	syncs   = &dev.SafeSlice[string]{}
-	recvs   = &dev.SafeSlice[string]{}
+	syncs   = &dev.SafeSlice[string]{} // TODO: remove someday
+	recvs   = &dev.SafeSlice[string]{} // TODO: remove someday
 	locker  = semaphore.NewWeighted(1)
 	errBusy = xerrors.New("busy locker")
 )
@@ -124,11 +124,10 @@ func SnapWatcher(nd *p2p.Node, syncDir string) {
 			continue
 		}
 
-		fmt.Printf("diff: A:%d, M:%d, D:%d\n", len(diff.Adds), len(diff.Modifies), len(diff.Deletes))
-
+		// fmt.Printf("diff: A:%d, M:%d, D:%d\n", len(diff.Adds), len(diff.Modifies), len(diff.Deletes))
 		func() {
 			if err := locker.Acquire(context.Background(), 1); err != nil {
-				println("locker.Acquire")
+				log.Printf("locker.Acquire: %+v\n", err)
 				return
 			}
 			defer locker.Release(1)
