@@ -242,8 +242,13 @@ func (nd *Node) run(psub *pubsub.PubSub) {
 				// log.Println("DHT Connection failed:", p.ID, ">>", err)
 				continue
 			}
-			if Peers.AppendUnique(p.ID) {
-				log.Printf("Connect peer by DHT: %s\n", p.ID)
+			if !Peers.AppendUnique(p.ID) {
+				continue
+			}
+			log.Printf("Connected peer by DHT: %s\n", p.ID)
+
+			if err := nd.DS.Sync(ctx, DSKey); err != nil {
+				log.Fatalf("start sync first: %+v\n", err)
 			}
 		}
 	}

@@ -230,7 +230,7 @@ func SyncWatcher(nd *p2p.Node, syncDir string) {
 
 		var (
 			lastTime time.Time
-			interval = 10 * time.Second
+			interval = 5 * time.Second
 		)
 
 		elapsed := time.Since(lastTime)
