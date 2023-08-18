@@ -32,7 +32,7 @@ func IsFileWritten(path string) (bool, int64) {
 }
 
 func UntilWritten(path string) {
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(30 * time.Millisecond)
 	size := FileSize(path)
 	if size > 1024*20 {
 		for {
